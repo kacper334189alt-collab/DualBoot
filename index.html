@@ -1,0 +1,505 @@
+```html
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GRUB Boot Menu</title>
+
+<style>
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+
+    html, body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        font-family: "Segoe UI", Arial, sans-serif;
+        background: #000;
+        color: #fff;
+    }
+
+    body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background:
+            radial-gradient(circle at 50% 45%, #202020 0%, #0d0d0d 42%, #000 100%);
+    }
+
+    /* Delikatny efekt monitora */
+    body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background:
+            repeating-linear-gradient(
+                to bottom,
+                rgba(255,255,255,0.018) 0px,
+                rgba(255,255,255,0.018) 1px,
+                transparent 1px,
+                transparent 4px
+            );
+        opacity: .45;
+        z-index: 20;
+    }
+
+    .boot-screen {
+        width: 100%;
+        height: 100%;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Logo GRUB */
+    .grub-title {
+        position: absolute;
+        top: 8%;
+        text-align: center;
+        font-size: clamp(28px, 4vw, 52px);
+        font-weight: 300;
+        letter-spacing: 4px;
+        color: #dcdcdc;
+        text-shadow:
+            0 2px 8px rgba(255,255,255,.15),
+            0 0 30px rgba(255,255,255,.05);
+    }
+
+    .grub-subtitle {
+        position: absolute;
+        top: 15%;
+        font-size: 13px;
+        color: #777;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+    }
+
+    .menu {
+        width: min(900px, 88vw);
+        margin-top: 30px;
+    }
+
+    .entry {
+        height: 82px;
+        margin: 12px 0;
+        border: 1px solid rgba(255,255,255,.12);
+        background: linear-gradient(
+            180deg,
+            rgba(255,255,255,.055),
+            rgba(255,255,255,.018)
+        );
+
+        display: flex;
+        align-items: center;
+        padding: 0 28px;
+
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+
+        transition:
+            transform .18s ease,
+            background .18s ease,
+            border-color .18s ease,
+            box-shadow .18s ease;
+
+        box-shadow:
+            inset 0 1px rgba(255,255,255,.04),
+            0 8px 25px rgba(0,0,0,.25);
+    }
+
+    .entry::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 4px;
+        height: 100%;
+        background: transparent;
+        transition: .18s ease;
+    }
+
+    .entry:hover,
+    .entry.selected {
+        transform: scale(1.015);
+
+        background: linear-gradient(
+            90deg,
+            rgba(255,255,255,.12),
+            rgba(255,255,255,.045)
+        );
+
+        border-color: rgba(255,255,255,.32);
+
+        box-shadow:
+            0 0 0 1px rgba(255,255,255,.04),
+            0 12px 35px rgba(0,0,0,.4),
+            inset 0 0 30px rgba(255,255,255,.025);
+    }
+
+    .entry.selected::before {
+        background: #fff;
+        box-shadow: 0 0 14px rgba(255,255,255,.7);
+    }
+
+    .icon {
+        width: 48px;
+        height: 48px;
+        margin-right: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    /* Windows logo */
+    .windows-logo {
+        width: 38px;
+        height: 38px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr 1fr;
+        gap: 3px;
+        transform: skewY(-3deg);
+    }
+
+    .windows-logo span {
+        background: #f2f2f2;
+        box-shadow: 0 0 8px rgba(255,255,255,.18);
+    }
+
+    /* Linux Mint */
+    .mint-logo {
+        width: 43px;
+        height: 43px;
+        border: 2px solid #ddd;
+        border-radius: 50%;
+        position: relative;
+        opacity: .95;
+    }
+
+    .mint-logo::before,
+    .mint-logo::after {
+        content: "";
+        position: absolute;
+        top: 11px;
+        width: 9px;
+        height: 17px;
+        border: 2px solid #ddd;
+        border-radius: 5px;
+    }
+
+    .mint-logo::before {
+        left: 8px;
+    }
+
+    .mint-logo::after {
+        right: 8px;
+    }
+
+    .entry-info {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .entry-name {
+        font-size: 21px;
+        font-weight: 400;
+        letter-spacing: .3px;
+        color: #eee;
+    }
+
+    .entry-desc {
+        font-size: 12px;
+        color: #777;
+        letter-spacing: .4px;
+    }
+
+    .key {
+        margin-left: auto;
+        width: 32px;
+        height: 32px;
+        border: 1px solid rgba(255,255,255,.18);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #999;
+        font-size: 13px;
+    }
+
+    .footer {
+        position: absolute;
+        bottom: 7%;
+        width: min(900px, 88vw);
+        display: flex;
+        justify-content: space-between;
+        color: #666;
+        font-size: 12px;
+        letter-spacing: .4px;
+    }
+
+    .footer span {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .keyboard-key {
+        border: 1px solid #444;
+        padding: 3px 7px;
+        min-width: 24px;
+        text-align: center;
+        color: #aaa;
+        background: rgba(255,255,255,.025);
+    }
+
+    .booting {
+        animation: bootFade .7s ease forwards;
+    }
+
+    @keyframes bootFade {
+        from {
+            opacity: 1;
+            filter: blur(0);
+        }
+
+        to {
+            opacity: 0;
+            filter: blur(5px);
+            transform: scale(1.02);
+        }
+    }
+
+    /* Małe info w stylu bootloadera */
+    .version {
+        position: absolute;
+        bottom: 2.5%;
+        left: 3%;
+        color: #444;
+        font-family: monospace;
+        font-size: 11px;
+    }
+
+    @media (max-width: 600px) {
+        .entry {
+            height: 72px;
+            padding: 0 18px;
+        }
+
+        .entry-name {
+            font-size: 17px;
+        }
+
+        .entry-desc {
+            font-size: 10px;
+        }
+
+        .icon {
+            margin-right: 16px;
+        }
+
+        .footer {
+            font-size: 10px;
+        }
+    }
+</style>
+</head>
+
+<body>
+
+<div class="boot-screen" id="bootScreen">
+
+    <div class="grub-title">
+        GNU GRUB
+    </div>
+
+    <div class="grub-subtitle">
+        Boot Menu
+    </div>
+
+    <div class="menu">
+
+        <!-- WINDOWS -->
+        <div
+            class="entry selected"
+            data-target="Windows11.html"
+            onclick="boot(this)"
+        >
+            <div class="icon">
+                <div class="windows-logo">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+
+            <div class="entry-info">
+                <div class="entry-name">
+                    Windows 11
+                </div>
+
+                <div class="entry-desc">
+                    Windows Boot Manager
+                </div>
+            </div>
+
+            <div class="key">
+                1
+            </div>
+        </div>
+
+
+        <!-- LINUX MINT -->
+        <div
+            class="entry"
+            data-target="Linux-Mint.html"
+            onclick="boot(this)"
+        >
+            <div class="icon">
+                <div class="mint-logo"></div>
+            </div>
+
+            <div class="entry-info">
+                <div class="entry-name">
+                    Linux Mint
+                </div>
+
+                <div class="entry-desc">
+                    GNU/Linux
+                </div>
+            </div>
+
+            <div class="key">
+                2
+            </div>
+        </div>
+
+    </div>
+
+    <div class="footer">
+
+        <span>
+            <b class="keyboard-key">↑</b>
+            <b class="keyboard-key">↓</b>
+            Select
+        </span>
+
+        <span>
+            <b class="keyboard-key">Enter</b>
+            Boot
+        </span>
+
+        <span>
+            <b class="keyboard-key">Esc</b>
+            Restart
+        </span>
+
+    </div>
+
+    <div class="version">
+        GRUB 2.12
+    </div>
+
+</div>
+
+
+<script>
+
+    const entries = document.querySelectorAll(".entry");
+    const screen = document.getElementById("bootScreen");
+
+    let selected = 0;
+
+    function updateSelection() {
+        entries.forEach((entry, index) => {
+            entry.classList.toggle(
+                "selected",
+                index === selected
+            );
+        });
+    }
+
+    function boot(entry) {
+
+        const target = entry.dataset.target;
+
+        screen.classList.add("booting");
+
+        setTimeout(() => {
+            window.location.href = target;
+        }, 650);
+    }
+
+    document.addEventListener("keydown", function(event) {
+
+        if (event.key === "ArrowUp") {
+
+            event.preventDefault();
+
+            selected--;
+
+            if (selected < 0) {
+                selected = entries.length - 1;
+            }
+
+            updateSelection();
+        }
+
+
+        if (event.key === "ArrowDown") {
+
+            event.preventDefault();
+
+            selected++;
+
+            if (selected >= entries.length) {
+                selected = 0;
+            }
+
+            updateSelection();
+        }
+
+
+        if (event.key === "Enter") {
+
+            event.preventDefault();
+
+            boot(entries[selected]);
+        }
+
+
+        /* Klawisze 1 i 2 */
+        if (event.key === "1") {
+            selected = 0;
+            updateSelection();
+            boot(entries[0]);
+        }
+
+        if (event.key === "2") {
+            selected = 1;
+            updateSelection();
+            boot(entries[1]);
+        }
+
+
+        /* ESC - przeładowanie menu */
+        if (event.key === "Escape") {
+            location.reload();
+        }
+
+    });
+
+</script>
+
+</body>
+</html>
+```

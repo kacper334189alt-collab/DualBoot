@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Windows 11 Pro Simulator</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+
+    body {
+      height: 100vh;
+      overflow: hidden;
+      background: url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1920&auto=format&fit=crop') center/cover no-repeat;
+      transition: filter 0.5s ease;
+    }
+
+    /* --- EKRAN RESTARTU & BLOKADY --- */
+    #restart-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background: #000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 1.2s ease-in-out;
+      z-index: 99999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+    }
+
+    #restart-overlay.active {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    #login-screen {
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(25px);
+      z-index: 50000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      transition: opacity 0.5s ease, visibility 0.5s;
+    }
+
+    #login-screen.hidden {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    .avatar {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: #0078d4;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 50px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+      margin-bottom: 16px;
+    }
+
+    .login-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .login-input {
+      padding: 10px 16px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.15);
+      color: white;
+      outline: none;
+      text-align: center;
+      font-size: 14px;
+      backdrop-filter: blur(10px);
+      width: 220px;
+    }
+
+    .login-input::placeholder { color: rgba(255,255,255,0.7); }
+
+    .login-hint {
+      font-size: 12px;
+      color: rgba(255,255,255,0.6);
+      margin-top: 4px;
+    }
+
+    /* --- PULPIT & IKONY --- */
+    #desktop {
+      height: calc(100vh - 48px);
+      position: relative;
+      width: 100%;
+    }
+
+    .desktop-icon {
+      width: 86px;
+      height: 96px;
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      cursor: pointer;
+      color: white;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+      font-size: 12px;
+      text-align: center;
+      padding: 4px;
+      transition: background 0.15s, border 0.15s;
+      border: 1px solid transparent;
+    }
+
+    .desktop-icon:hover {
+      background: rgba(255, 255, 255, 0.18);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+    }
+
+    .icon-svg {
+      width: 42px;
+      height: 42px;
+      margin-bottom: 6px;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+      pointer-events: none;
+    }
+
+    /* Context Menu */
+    #context-menu {
+      position: absolute;
+      width: 190px;
+      background: rgba(243, 243, 243, 0.88);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+      display: none;
+      flex-direction: column;
+      padding: 6px;
+      z-index: 40000;
+    }
+
+    .context-item {
+      padding: 8px 12px;
+      font-size: 13px;
+      color: #1a1a1a;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .context-item:hover { background: rgba(0, 120, 212, 0.1); }
+
+    /* --- OKNA SYSTEMOWE --- */
+    .window {
+      position: absolute;
+      width: 640px;
+      height: 460px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(20px);
+      border-radius: 10px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 100;
+    }
+
+    .window.active { display: flex; }
+
+    .window-header {
+      height: 38px;
+      background: rgba(240, 240, 240, 0.8);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 12px;
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+      cursor: move;
+    }
+
+    .window-title {
+      font-size: 13px;
+      color: #333;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 500;
+    }
+
+    .win-btn {
+      width: 40px;
+      height: 38px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .win-btn.close:hover { background: #e81123; color: white; }
+
+    .window-body {
+      flex: 1;
+      padding: 12px;
+      overflow: auto;
+      background: #fdfdfd;
+    }
+
+    /* --- MINIGRA MINECRAFT --- */
+    #mc-toolbar {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 8px;
+      background: #e5e5e5;
+      padding: 6px;
+      border-radius: 6px;
+      overflow-x: auto;
+    }
+
+    .mc-block-btn {
+      width: 32px;
+      height: 32px;
+      border: 2px solid transparent;
+      cursor: pointer;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+
+    .mc-block-btn.selected { border-color: #000; transform: scale(1.05); }
+
+    #mc-grid {
+      display: grid;
+      grid-template-columns: repeat(20, 1fr);
+      grid-template-rows: repeat(12, 28px);
+      gap: 1px;
+      background: #7ec0ee;
+      border: 2px solid #444;
+    }
+
+    .mc-cell { width: 100%; height: 100%; cursor: pointer; }
+    .b-air { background: transparent; }
+    .b-grass { background: #55a02e; }
+    .b-dirt { background: #866043; }
+    .b-stone { background: #808080; }
+    .b-wood { background: #67492f; }
+    .b-leaves { background: #2d6e1d; }
+    .b-planks { background: #c49660; }
+    .b-birch { background: #d7d7c0; }
+    .b-gold { background: #e6c834; }
+    .b-glass { background: rgba(200,240,255,0.6); border: 1px solid rgba(255,255,255,0.8); }
+    .b-fire { background: #ff4500; }
+
+    /* --- MINIGRA ROBLOX --- */
+    #roblox-canvas {
+      width: 100%;
+      height: 320px;
+      background: linear-gradient(to bottom, #1a1c23, #0d0e12);
+      border-radius: 8px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #roblox-player {
+      width: 22px;
+      height: 22px;
+      background: #ff3b30;
+      border-radius: 4px;
+      position: absolute;
+      box-shadow: 0 0 10px rgba(255,59,48,0.5);
+    }
+
+    .roblox-platform {
+      position: absolute;
+      background: #34c759;
+      height: 14px;
+      border-radius: 4px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    }
+
+    /* --- PRZEGLĄDARKA WEB --- */
+    .browser-bar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .browser-input {
+      flex: 1;
+      padding: 6px 12px;
+      border-radius: 20px;
+      border: 1px solid #ccc;
+      outline: none;
+      font-size: 12px;
+    }
+
+    .browser-content {
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 16px;
+      background: white;
+      height: calc(100% - 45px);
+      overflow-y: auto;
+    }
+
+    /* --- PASEK ZADAŃ I MENU START --- */
+    #taskbar {
+      height: 48px;
+      background: rgba(243, 243, 243, 0.85);
+      backdrop-filter: blur(20px);
+      position: fixed;
+      bottom: 0; width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-top: 1px solid rgba(255, 255, 255, 0.4);
+      z-index: 20000;
+    }
+
+    .taskbar-icons { display: flex; gap: 6px; }
+
+    .taskbar-btn {
+      width: 40px; height: 40px;
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+
+    .taskbar-btn:hover { background: rgba(255, 255, 255, 0.6); }
+
+    #tray-clock {
+      position: absolute; right: 12px;
+      font-size: 12px; color: #1a1a1a;
+      text-align: right; padding: 4px 8px; border-radius: 4px;
+    }
+
+    #start-menu {
+      width: 520px; height: 560px;
+      background: rgba(243, 243, 243, 0.92);
+      backdrop-filter: blur(30px);
+      border-radius: 12px;
+      position: fixed; bottom: -650px; left: 50%;
+      transform: translateX(-50%);
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      transition: bottom 0.35s cubic-bezier(0.1, 0.9, 0.2, 1);
+      z-index: 19000;
+      padding: 24px;
+      display: flex; flex-direction: column; justify-content: space-between;
+    }
+
+    #start-menu.open { bottom: 60px; }
+
+    .app-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .app-item {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 6px; cursor: pointer; padding: 8px; border-radius: 6px;
+      font-size: 12px; color: #202020;
+    }
+
+    .app-item:hover { background: rgba(255, 255, 255, 0.6); }
+
+    .start-footer {
+      display: flex; justify-content: space-between; align-items: center;
+      border-top: 1px solid rgba(0,0,0,0.08); padding-top: 12px;
+    }
+  </style>
+</head>
+<body oncontextmenu="return showContextMenu(event);">
+
+  <!-- ZACIEMNIENIE RESTARTU -->
+  <div id="restart-overlay">
+    <h2>Uruchamianie ponowne...</h2>
+  </div>
+
+  <!-- EKRAN LOGOWANIA -->
+  <div id="login-screen">
+    <div class="avatar">👤</div>
+    <h2 style="margin-bottom:12px;">Użytkownik</h2>
+    <div class="login-box">
+      <input type="password" id="login-pass" class="login-input" placeholder="Wpisz hasło" onkeypress="checkLogin(event)">
+      <div class="login-hint">💡 Podpowiedź: haslo to login</div>
+    </div>
+  </div>
+
+  <!-- MENU POD PRAWYM PRZYCISKIEM -->
+  <div id="context-menu">
+    <div class="context-item" onclick="createFolder()">📁 Nowy folder</div>
+    <div class="context-item" onclick="location.reload()">🔄 Odśwież</div>
+  </div>
+
+  <!-- PULPIT -->
+  <div id="desktop" onclick="hideContextMenu();">
+    
+    <!-- IKONY PULPITU -->
+    <div class="desktop-icon" style="top:20px; left:20px;" id="icon-browser" data-app="browser">
+      <svg class="icon-svg" viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" fill="#0078d4"/><path d="M24 12a12 12 0 1 0 12 12" stroke="#fff" stroke-width="4" fill="none"/></svg>
+      <span>Przeglądarka</span>
+    </div>
+
+    <div class="desktop-icon" style="top:20px; left:120px;" id="icon-minecraft" data-app="minecraft">
+      <svg class="icon-svg" viewBox="0 0 48 48"><rect x="8" y="8" width="32" height="32" rx="4" fill="#55a02e"/><path d="M8 20h32v20H8z" fill="#866043"/></svg>
+      <span>Minecraft</span>
+    </div>
+
+    <div class="desktop-icon" style="top:20px; left:220px;" id="icon-roblox" data-app="roblox">
+      <svg class="icon-svg" viewBox="0 0 48 48"><rect x="10" y="10" width="28" height="28" rx="6" fill="#000" transform="rotate(15 24 24)"/><rect x="20" y="20" width="8" height="8" fill="#fff" transform="rotate(15 24 24)"/></svg>
+      <span>Roblox</span>
+    </div>
+
+  </div>
+
+  <!-- OKNA SYSTEMOWE -->
+
+  <!-- Przeglądarka -->
+  <div id="win-browser" class="window" style="width:700px; height:480px; top:50px; left:100px;">
+    <div class="window-header">
+      <div class="window-title">🌐 Edge Web Browser</div>
+      <div class="win-btn close" onclick="closeWindow('browser')">&#215;</div>
+    </div>
+    <div class="window-body">
+      <div class="browser-bar">
+        <input type="text" id="browser-url" class="browser-input" value="https://przepisy.pl/pizza">
+        <button onclick="navigateBrowser()" style="padding:4px 12px; cursor:pointer;">Idź</button>
+      </div>
+      <div class="browser-content" id="browser-viewport"></div>
+    </div>
+  </div>
+
+  <!-- Minecraft -->
+  <div id="win-minecraft" class="window" style="width:620px; height:480px; top:60px; left:150px;">
+    <div class="window-header">
+      <div class="window-title">⛏️ Minecraft 2D - Expanded</div>
+      <div class="win-btn close" onclick="closeWindow('minecraft')">&#215;</div>
+    </div>
+    <div class="window-body">
+      <div id="mc-toolbar">
+        <div class="mc-block-btn selected b-grass" title="Trawa" onclick="selectBlock('b-grass', this)"></div>
+        <div class="mc-block-btn b-dirt" title="Ziemia" onclick="selectBlock('b-dirt', this)"></div>
+        <div class="mc-block-btn b-stone" title="Kamień" onclick="selectBlock('b-stone', this)"></div>
+        <div class="mc-block-btn b-wood" title="Drewno" onclick="selectBlock('b-wood', this)"></div>
+        <div class="mc-block-btn b-leaves" title="Liście" onclick="selectBlock('b-leaves', this)"></div>
+        <div class="mc-block-btn b-planks" title="Deski" onclick="selectBlock('b-planks', this)"></div>
+        <div class="mc-block-btn b-birch" title="Brzoza" onclick="selectBlock('b-birch', this)"></div>
+        <div class="mc-block-btn b-gold" title="Złoto" onclick="selectBlock('b-gold', this)"></div>
+        <div class="mc-block-btn b-glass" title="Szkło" onclick="selectBlock('b-glass', this)"></div>
+        <div class="mc-block-btn b-fire" title="Ogień" onclick="selectBlock('b-fire', this)"></div>
+        <div class="mc-block-btn b-air" title="Usuń" onclick="selectBlock('b-air', this)" style="border:1px dashed #666; text-align:center; line-height:28px; font-size:10px;">❌</div>
+      </div>
+      <div id="mc-grid"></div>
+    </div>
+  </div>
+
+  <!-- Roblox Obby -->
+  <div id="win-roblox" class="window" style="width:640px; height:460px; top:70px; left:200px;">
+    <div class="window-header">
+      <div class="window-title">🎮 Roblox Obby (Smooth & Collisions)</div>
+      <div class="win-btn close" onclick="closeWindow('roblox')">&#215;</div>
+    </div>
+    <div class="window-body">
+      <div style="margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:12px;">Sterowanie: <b>A / D</b> (Ruch), <b>SPACE</b> (Skok)</span>
+        <button onclick="generateObby()" style="padding:4px 8px; cursor:pointer;">Regeneruj Trasę</button>
+      </div>
+      <div id="roblox-canvas">
+        <div id="roblox-player"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generowane Okno Foldera -->
+  <div id="win-folder" class="window" style="width:450px; height:300px; top:100px; left:250px;">
+    <div class="window-header">
+      <div class="window-title" id="folder-win-title">📁 Nowy Folder</div>
+      <div class="win-btn close" onclick="closeWindow('folder')">&#215;</div>
+    </div>
+    <div class="window-body">
+      <p style="color:#666; font-size:13px;">Ten folder jest pusty.</p>
+    </div>
+  </div>
+
+  <!-- MENU START -->
+  <div id="start-menu">
+    <div>
+      <input type="text" style="width:100%; padding:8px 14px; border-radius:20px; border:1px solid #ccc; margin-bottom:20px; outline:none;" placeholder="Wpisz wyszukiwaną frazę...">
+      <div style="font-size:12px; font-weight:600; margin-bottom:12px;">Przypięte aplikacje</div>
+      <div class="app-grid">
+        <div class="app-item" onclick="openWindow('browser'); toggleStartMenu();">
+          <svg class="icon-svg" viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" fill="#0078d4"/></svg>
+          Przeglądarka
+        </div>
+        <div class="app-item" onclick="openWindow('minecraft'); toggleStartMenu();">
+          <svg class="icon-svg" viewBox="0 0 48 48"><rect x="8" y="8" width="32" height="32" rx="4" fill="#55a02e"/></svg>
+          Minecraft
+        </div>
+        <div class="app-item" onclick="openWindow('roblox'); toggleStartMenu();">
+          <svg class="icon-svg" viewBox="0 0 48 48"><rect x="10" y="10" width="28" height="28" rx="6" fill="#000"/></svg>
+          Roblox
+        </div>
+      </div>
+    </div>
+    <div class="start-footer">
+      <span style="font-size:13px; font-weight:500;">Użytkownik</span>
+      <div style="width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer;" onclick="triggerRestart()" title="Uruchom ponownie">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- PASEK ZADAŃ -->
+  <div id="taskbar">
+    <div class="taskbar-icons">
+      <div class="taskbar-btn" onclick="toggleStartMenu(); event.stopPropagation();">
+        <svg width="22" height="22" viewBox="0 0 87 87" fill="#0078d4"><path d="M0 0h41v41H0zM46 0h41v41H46zM0 46h41v41H0zM46 46h41v41H46z"/></svg>
+      </div>
+      <div class="taskbar-btn" onclick="openWindow('browser')">🌐</div>
+      <div class="taskbar-btn" onclick="openWindow('minecraft')">⛏️</div>
+      <div class="taskbar-btn" onclick="openWindow('roblox')">🎮</div>
+    </div>
+    <div id="tray-clock">
+      <div id="clock-time">12:00</div>
+      <div id="clock-date">15.08.2026</div>
+    </div>
+  </div>
+
+  <script>
+    /* LOGOWANIE */
+    function checkLogin(e) {
+      if (e.key === 'Enter') {
+        const val = document.getElementById('login-pass').value;
+        if (val === 'login') {
+          document.getElementById('login-screen').classList.add('hidden');
+        } else {
+          alert('Błędne hasło! Sprawdź podpowiedź.');
+        }
+      }
+    }
+
+    /* RESTART Z ANIMACJĄ ZACIEMNIENIA I PRZEKIEROWANIEM */
+    function triggerRestart() {
+      const overlay = document.getElementById('restart-overlay');
+      overlay.classList.add('active');
+      setTimeout(() => {
+        window.location.href = 'index.html';
+      }, 1300);
+    }
+
+    /* MENU CONTEXTOWE & TWORZENIE FOLDERÓW */
+    let folderCount = 0;
+    function showContextMenu(e) {
+      e.preventDefault();
+      const menu = document.getElementById('context-menu');
+      menu.style.display = 'flex';
+      menu.style.left = e.clientX + 'px';
+      menu.style.top = e.clientY + 'px';
+      return false;
+    }
+
+    function hideContextMenu() {
+      document.getElementById('context-menu').style.display = 'none';
+    }
+
+    function createFolder() {
+      folderCount++;
+      const desktop = document.getElementById('desktop');
+      const folder = document.createElement('div');
+      folder.className = 'desktop-icon';
+      folder.style.top = (120 + (folderCount * 10)) + 'px';
+      folder.style.left = (20 + (folderCount * 10)) + 'px';
+      folder.dataset.app = 'folder';
+      folder.dataset.folderName = `Folder ${folderCount}`;
+      folder.innerHTML = `
+        <svg class="icon-svg" viewBox="0 0 48 48"><path d="M40 12H22l-4-4H8c-2.2 0-4 1.8-4 4v24c0 2.2 1.8 4 4 4h32c2.2 0 4-1.8 4-4V16c0-2.2-1.8-4-4-4z" fill="#ffca28"/></svg>
+        <span>Folder ${folderCount}</span>
+      `;
+      desktop.appendChild(folder);
+      makeDraggableIcon(folder);
+      hideContextMenu();
+    }
+
+    /* MECHANIZM OTWIERANIA APKA ORAZ PRZESUWANIA IKON */
+    function handleIconLaunch(elem) {
+      const appId = elem.dataset.app;
+      if (appId === 'folder') {
+        document.getElementById('folder-win-title').textContent = `📁 ${elem.dataset.folderName}`;
+        openWindow('folder');
+      } else if (appId) {
+        openWindow(appId);
+      }
+    }
+
+    function makeDraggableIcon(elem) {
+      let isDragging = false;
+      let startX = 0, startY = 0;
+      let initialLeft = 0, initialTop = 0;
+
+      // Otwieranie po podwójnym kliknięciu (Standard Windows)
+      elem.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        handleIconLaunch(elem);
+      });
+
+      elem.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        isDragging = false;
+        startX = e.clientX;
+        startY = e.clientY;
+        initialLeft = elem.offsetLeft;
+        initialTop = elem.offsetTop;
+
+        const onMouseMove = (moveEvt) => {
+          const dx = moveEvt.clientX - startX;
+          const dy = moveEvt.clientY - startY;
+          
+          if (Math.hypot(dx, dy) > 5) {
+            isDragging = true;
+            elem.style.left = (initialLeft + dx) + 'px';
+            elem.style.top = (initialTop + dy) + 'px';
+          }
+        };
+
+        const onMouseUp = () => {
+          document.removeEventListener('mousemove', onMouseMove);
+          document.removeEventListener('mouseup', onMouseUp);
+        };
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+      });
+    }
+
+    document.querySelectorAll('.desktop-icon').forEach(makeDraggableIcon);
+
+    /* ZARZĄDZANIE OKNAMI & START */
+    function toggleStartMenu() {
+      document.getElementById('start-menu').classList.toggle('open');
+    }
+
+    let topZ = 100;
+    function openWindow(id) {
+      const win = document.getElementById('win-' + id);
+      if (win) {
+        win.classList.add('active');
+        topZ++;
+        win.style.zIndex = topZ;
+      }
+    }
+
+    function closeWindow(id) {
+      const win = document.getElementById('win-' + id);
+      if (win) {
+        win.classList.remove('active');
+      }
+    }
+
+    // Przesuwanie okien
+    document.querySelectorAll('.window').forEach(win => {
+      win.addEventListener('mousedown', () => { topZ++; win.style.zIndex = topZ; });
+      const header = win.querySelector('.window-header');
+      let drag = false, x = 0, y = 0;
+      header.addEventListener('mousedown', (e) => {
+        drag = true;
+        x = e.clientX - win.offsetLeft;
+        y = e.clientY - win.offsetTop;
+      });
+      document.addEventListener('mousemove', (e) => {
+        if (drag) {
+          win.style.left = (e.clientX - x) + 'px';
+          win.style.top = (e.clientY - y) + 'px';
+        }
+      });
+      document.addEventListener('mouseup', () => drag = false);
+    });
+
+    /* PRZEGLĄDARKA STRON */
+    const pages = {
+      'https://przepisy.pl/pizza': `
+        <h1>🍕 Przepis na Domową Pizzę</h1>
+        <p style="margin-top:10px;"><b>Składniki:</b> 250g mąki, 150ml wody, 7g drożdży, sos pomidorowy, ser mozzarella.</p>
+        <ol style="margin-left:20px; margin-top:10px;">
+          <li>Zgnieć ciasto i odstaw na 30 minut.</li>
+          <li>Rozwałkuj, nałóż sos oraz ser.</li>
+          <li>Piecz w 250°C przez 10 minut.</li>
+        </ol>
+      `,
+      'https://tutoriale.pl/html': `
+        <h1>💻 Kurs HTML dla Początkujących</h1>
+        <p style="margin-top:10px;">HTML to podstawowy język budowy stron www.</p>
+        <pre style="background:#eee; padding:10px; margin-top:10px; border-radius:4px;">
+&lt;html&gt;
+  &lt;body&gt;
+    &lt;h1&gt;Witaj świecie!&lt;/h1&gt;
+  &lt;/body&gt;
+&lt;/html&gt;</pre>
+      `
+    };
+
+    function navigateBrowser() {
+      const url = document.getElementById('browser-url').value;
+      const viewport = document.getElementById('browser-viewport');
+      if (pages[url]) {
+        viewport.innerHTML = pages[url];
+      } else {
+        viewport.innerHTML = `<h2>404 - Nie znaleziono strony</h2><p>Dostępne strony:<br> - https://przepisy.pl/pizza<br> - https://tutoriale.pl/html</p>`;
+      }
+    }
+    navigateBrowser();
+
+    /* MINECRAFT 2D */
+    let currentMcBlock = 'b-grass';
+    function selectBlock(bClass, btn) {
+      currentMcBlock = bClass;
+      document.querySelectorAll('.mc-block-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+    }
+
+    const grid = document.getElementById('mc-grid');
+    for (let i = 0; i < 240; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'mc-cell ' + (i >= 180 ? 'b-stone' : (i >= 140 ? 'b-dirt' : (i >= 120 ? 'b-grass' : 'b-air')));
+      cell.onclick = () => cell.className = 'mc-cell ' + currentMcBlock;
+      grid.appendChild(cell);
+    }
+
+    /* ROBLOX OBBY - SMOOTH MOVEMENT & COLLISIONS */
+    const pState = { x: 20, y: 0, vx: 0, vy: 0, grounded: false };
+    const keys = {};
+    let platforms = [];
+
+    document.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+    document.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+    function generateObby() {
+      const canvas = document.getElementById('roblox-canvas');
+      canvas.querySelectorAll('.roblox-platform').forEach(p => p.remove());
+      platforms = [];
+
+      // Podłoga początkowa
+      createPlat(0, 0, 100, 16);
+
+      let lastX = 120;
+      for (let i = 0; i < 6; i++) {
+        const w = 70, h = 14;
+        const y = Math.floor(Math.random() * 80) + 20;
+        createPlat(lastX, y, w, h);
+        lastX += 85;
+      }
+      pState.x = 20; pState.y = 40; pState.vx = 0; pState.vy = 0;
+    }
+
+    function createPlat(x, y, w, h) {
+      const canvas = document.getElementById('roblox-canvas');
+      const div = document.createElement('div');
+      div.className = 'roblox-platform';
+      div.style.left = x + 'px';
+      div.style.bottom = y + 'px';
+      div.style.width = w + 'px';
+      div.style.height = h + 'px';
+      canvas.appendChild(div);
+      platforms.push({ x, y, w, h });
+    }
+
+    function loopObby() {
+      if (document.getElementById('win-roblox').classList.contains('active')) {
+        // Płynne sterowanie (poziomo)
+        if (keys['a']) pState.vx = -3.5;
+        else if (keys['d']) pState.vx = 3.5;
+        else pState.vx *= 0.7;
+
+        // Skok
+        if ((keys[' '] || keys['spacebar']) && pState.grounded) {
+          pState.vy = 9.5;
+          pState.grounded = false;
+        }
+
+        // Grawitacja
+        pState.vy -= 0.45;
+
+        // Aktualizacja pozycji
+        pState.x += pState.vx;
+        pState.y += pState.vy;
+
+        // Kolizje z platformami
+        pState.grounded = false;
+        const pSize = 22;
+
+        platforms.forEach(plat => {
+          if (
+            pState.x + pSize > plat.x &&
+            pState.x < plat.x + plat.w &&
+            pState.y <= plat.y + plat.h &&
+            pState.y + pState.vy >= plat.y
+          ) {
+            pState.y = plat.y + plat.h;
+            pState.vy = 0;
+            pState.grounded = true;
+          }
+        });
+
+        // Śmierć po spadnięciu
+        if (pState.y < -50) {
+          pState.x = 20; pState.y = 40; pState.vy = 0;
+        }
+
+        // Render pozycji gracza
+        const playerEl = document.getElementById('roblox-player');
+        playerEl.style.left = pState.x + 'px';
+        playerEl.style.bottom = pState.y + 'px';
+      }
+      requestAnimationFrame(loopObby);
+    }
+
+    generateObby();
+    loopObby();
+
+    // Zegar systemowy
+    setInterval(() => {
+      const now = new Date();
+      document.getElementById('clock-time').textContent = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+      document.getElementById('clock-date').textContent = now.toLocaleDateString();
+    }, 1000);
+  </script>
+</body>
+</html>

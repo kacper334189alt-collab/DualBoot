@@ -1,0 +1,2382 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Linux Mint (no detected DE)</title>
+
+<style>
+:root{
+  --bg:#07100b;
+  --panel:#0b160f;
+  --text:#c8ffd0;
+  --muted:#6e9a75;
+  --accent:#8be28f;
+  --error:#ff7676;
+}
+
+*{
+  box-sizing:border-box;
+}
+
+html,body{
+  margin:0;
+  width:100%;
+  height:100%;
+  background:#020503;
+  color:var(--text);
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+}
+
+body{
+  display:flex;
+  align-items:stretch;
+}
+
+#terminal{
+  width:100%;
+  height:100%;
+  padding:18px;
+  overflow:auto;
+  cursor:text;
+  background:
+    radial-gradient(
+      circle at 50% 0%,
+      #102318 0,
+      #06100a 35%,
+      #020503 75%
+    );
+}
+
+.line{
+  white-space:pre-wrap;
+  word-break:break-word;
+  line-height:1.45;
+}
+
+.prompt{
+  color:var(--accent);
+}
+
+.output{
+  color:var(--text);
+}
+
+.muted{
+  color:var(--muted);
+}
+
+.err{
+  color:var(--error);
+}
+
+.inputline{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+#cmd{
+  flex:1;
+  background:transparent;
+  border:0;
+  outline:0;
+  color:var(--text);
+  font:inherit;
+  caret-color:var(--accent);
+}
+
+::selection{
+  background:#234b2b;
+  color:#fff;
+}
+</style>
+</head>
+
+<body>
+
+<div id="terminal">
+  <div id="screen"></div>
+
+  <div class="inputline">
+    <span class="prompt">mint@mint:~$</span>
+    <input
+      id="cmd"
+      autocomplete="off"
+      autocorrect="off"
+      autocapitalize="off"
+      spellcheck="false"
+      autofocus
+    >
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* =========================================================
+   LINUX MINT BROWSER TERMINAL SIMULATOR
+   ========================================================= */
+
+const screen = document.getElementById("screen");
+const input = document.getElementById("cmd");
+const terminal = document.getElementById("terminal");
+
+
+/* =========================================================
+   STATE
+   ========================================================= */
+
+const state = {
+  user: "mint",
+  host: "mint",
+  cwd: "/home/mint",
+
+  history: [],
+  histPos: 0,
+
+  packages: new Set([
+    "base-files",
+    "bash",
+    "coreutils",
+    "sudo",
+    "apt",
+    "mint-meta-core",
+    "linux-image-generic"
+  ]),
+
+  files: {
+    "/home/mint": [
+      "Desktop",
+      "Documents",
+      "Downloads",
+      "Music",
+      "Pictures",
+      "Public",
+      "Templates",
+      "Videos"
+    ],
+
+    "/home/mint/Documents": [],
+    "/home/mint/Downloads": [],
+    "/tmp": [],
+
+    "/etc": [
+      "hostname",
+      "hosts",
+      "fstab",
+      "os-release",
+      "passwd"
+    ],
+
+    "/var": [
+      "log",
+      "cache",
+      "lib",
+      "tmp"
+    ],
+
+    "/usr": [
+      "bin",
+      "lib",
+      "share"
+    ],
+
+    "/bin": [
+      "bash",
+      "cat",
+      "cd",
+      "chmod",
+      "cp",
+      "echo",
+      "grep",
+      "ls",
+      "mkdir",
+      "mv",
+      "pwd",
+      "rm",
+      "touch"
+    ],
+
+    "/": [
+      "bin",
+      "boot",
+      "dev",
+      "etc",
+      "home",
+      "lib",
+      "media",
+      "mnt",
+      "opt",
+      "proc",
+      "root",
+      "run",
+      "sbin",
+      "sys",
+      "tmp",
+      "usr",
+      "var"
+    ]
+  }
+};
+
+
+/* =========================================================
+   COMMAND LIST
+   ========================================================= */
+
+const commands = {
+
+  help: "show this help",
+  clear: "clear terminal",
+  cls: "clear terminal",
+
+  about: "show simulator information",
+
+  neofetch: "show Mint/system information",
+  fastfetch: "show Mint/system information",
+
+  uname: "show kernel information",
+  hostname: "show hostname",
+  whoami: "show current user",
+  id: "show user/group information",
+
+  pwd: "print working directory",
+
+  ls: "list files",
+  dir: "list files",
+  ll: "long listing",
+
+  cd: "change directory",
+  tree: "show a simulated directory tree",
+
+  cat: "print a simulated file",
+  less: "view a simulated file",
+  more: "view a simulated file",
+  head: "show beginning of a file",
+  tail: "show end of a file",
+
+  touch: "create a simulated file",
+  mkdir: "create a simulated directory",
+  rmdir: "remove an empty simulated directory",
+
+  rm: "remove a simulated file/directory",
+  cp: "copy a simulated file",
+  mv: "move/rename a simulated file",
+
+  echo: "print text",
+  printf: "print formatted text",
+
+  grep: "search text in simulated files",
+  find: "find simulated paths",
+
+  which: "locate a command",
+  whereis: "locate a command",
+  type: "show command type",
+
+  history: "show command history",
+
+  date: "show current date",
+  cal: "show calendar",
+  uptime: "show simulated uptime",
+
+  ps: "show processes",
+  top: "show process snapshot",
+  htop: "show process snapshot",
+
+  free: "show memory",
+  df: "show disk usage",
+  du: "show directory usage",
+
+  lsblk: "show block devices",
+  mount: "show mounted filesystems",
+  mountpoint: "check mountpoint",
+
+  env: "show environment",
+  printenv: "show environment",
+  export: "set an environment variable",
+  alias: "show/set aliases",
+  source: "simulate sourcing a file",
+
+  bash: "start a simulated bash shell",
+  sh: "start a simulated shell",
+
+  sudo: "simulate elevated command execution",
+  su: "simulate switching user",
+
+  apt: "simulate APT package manager",
+  "apt-get": "simulate APT package manager",
+  "apt-cache": "simulate APT cache",
+
+  dpkg: "simulate dpkg",
+  snap: "simulate Snap",
+  flatpak: "simulate Flatpak",
+  nala: "simulate Nala",
+
+  systemctl: "simulate systemd commands",
+  service: "simulate service commands",
+
+  journalctl: "show simulated journal",
+  dmesg: "show simulated kernel messages",
+
+  lsmod: "show simulated kernel modules",
+  modprobe: "simulate module loading",
+
+  ip: "show simulated networking",
+  ifconfig: "show simulated networking",
+
+  ping: "simulate ping",
+  curl: "simulate HTTP request",
+  wget: "simulate download",
+
+  ssh: "simulate SSH",
+  scp: "simulate SCP",
+
+  git: "simulate common Git commands",
+
+  nano: "open a simulated nano screen",
+  vim: "open a simulated vim screen",
+  vi: "open a simulated vim screen",
+
+  man: "show a simulated manual",
+  info: "show command information",
+
+  chmod: "simulate permission changes",
+  chown: "simulate ownership changes",
+  ln: "simulate links",
+
+  kill: "simulate killing a process",
+  pkill: "simulate killing processes",
+
+  reboot: "reboot simulator -> index.html",
+
+  shutdown: "simulate shutdown",
+  poweroff: "simulate poweroff",
+  halt: "simulate halt",
+
+  logout: "simulate logout",
+  exit: "exit simulated shell"
+};
+
+
+/* =========================================================
+   MANUALS
+   ========================================================= */
+
+const manuals = {
+
+  ls:
+`ls [OPTION]... [FILE]...
+List directory contents.`,
+
+  cd:
+`cd [DIR]
+Change the current directory.`,
+
+  pwd:
+`pwd
+Print the name of the current working directory.`,
+
+  mkdir:
+`mkdir DIRECTORY...
+Create directories in the simulator.`,
+
+  rm:
+`rm [OPTION]... FILE...
+Remove simulated files or directories.`,
+
+  cp:
+`cp SOURCE DEST
+Copy simulated files.`,
+
+  mv:
+`mv SOURCE DEST
+Move or rename simulated files.`,
+
+  apt:
+`apt {update|upgrade|install|remove|search|list} [PACKAGE...]
+Simulated Debian/Ubuntu/Mint package manager.`,
+
+  systemctl:
+`systemctl {status|start|stop|restart|enable|disable} SERVICE
+Simulated systemd manager.`,
+
+  reboot:
+`reboot
+Open index.html and start the simulated system again.`,
+
+  sudo:
+`sudo COMMAND
+Simulate executing a command as root.`,
+
+  man:
+`man COMMAND
+Show a short simulated manual page.`
+};
+
+
+/* =========================================================
+   OUTPUT
+   ========================================================= */
+
+function out(text = "", cls = "output") {
+
+  const d = document.createElement("div");
+
+  d.className = "line " + cls;
+  d.textContent = text;
+
+  screen.appendChild(d);
+
+  terminal.scrollTop = terminal.scrollHeight;
+}
+
+
+function outLines(text, cls = "output") {
+
+  text.split("\n").forEach(line => {
+    out(line, cls);
+  });
+}
+
+
+/* =========================================================
+   PROMPT
+   ========================================================= */
+
+function prompt() {
+  return state.user + "@" + state.host + ":" + state.cwd + "$";
+}
+
+
+/* =========================================================
+   FOCUS
+   ========================================================= */
+
+function focusInput() {
+  input.focus();
+}
+
+
+/* Kliknięcie gdziekolwiek w terminal automatycznie
+   ustawia focus na pole tekstowe. */
+
+terminal.addEventListener("click", () => {
+  input.focus();
+});
+
+
+/* =========================================================
+   PATH FUNCTIONS
+   ========================================================= */
+
+function normalizePath(p) {
+
+  if (!p) {
+    return state.cwd;
+  }
+
+  if (p === "~") {
+    return "/home/" + state.user;
+  }
+
+  if (p.startsWith("~/")) {
+    p = "/home/" + state.user + "/" + p.slice(2);
+  }
+
+  if (!p.startsWith("/")) {
+    p = state.cwd + "/" + p;
+  }
+
+  const parts = [];
+
+  for (const x of p.split("/")) {
+
+    if (!x || x === ".") {
+      continue;
+    }
+
+    if (x === "..") {
+      parts.pop();
+    } else {
+      parts.push(x);
+    }
+  }
+
+  return "/" + parts.join("/");
+}
+
+
+function parent(p) {
+
+  if (p === "/") {
+    return "/";
+  }
+
+  const a = p.split("/");
+
+  a.pop();
+
+  return a.join("/") || "/";
+}
+
+
+function base(p) {
+
+  return p === "/"
+    ? "/"
+    : p.split("/").pop();
+}
+
+
+function existsDir(p) {
+
+  return Object.prototype.hasOwnProperty.call(
+    state.files,
+    p
+  );
+}
+
+
+function pathExists(p) {
+
+  if (existsDir(p)) {
+    return true;
+  }
+
+  const par = parent(p);
+
+  return (
+    existsDir(par) &&
+    state.files[par].includes(base(p))
+  );
+}
+
+
+function ensureEntry(dir, name) {
+
+  if (!state.files[dir]) {
+    state.files[dir] = [];
+  }
+
+  if (!state.files[dir].includes(name)) {
+    state.files[dir].push(name);
+  }
+}
+
+
+function removeEntry(path) {
+
+  const par = parent(path);
+  const b = base(path);
+
+  if (state.files[par]) {
+    state.files[par] =
+      state.files[par].filter(x => x !== b);
+  }
+}
+
+
+/* =========================================================
+   ARGUMENT PARSER
+   ========================================================= */
+
+function splitArgs(s) {
+
+  const r = [];
+
+  let cur = "";
+  let q = null;
+
+  for (let i = 0; i < s.length; i++) {
+
+    const c = s[i];
+
+    if (q) {
+
+      if (c === q) {
+        q = null;
+      }
+
+      else if (
+        c === "\\" &&
+        i + 1 < s.length
+      ) {
+        cur += s[++i];
+      }
+
+      else {
+        cur += c;
+      }
+
+    }
+
+    else if (c === "'" || c === '"') {
+      q = c;
+    }
+
+    else if (/\s/.test(c)) {
+
+      if (cur) {
+        r.push(cur);
+        cur = "";
+      }
+
+    }
+
+    else {
+      cur += c;
+    }
+  }
+
+  if (cur) {
+    r.push(cur);
+  }
+
+  return r;
+}
+
+
+/* =========================================================
+   LS
+   ========================================================= */
+
+function ls(args) {
+
+  let path = state.cwd;
+
+  let long = false;
+
+  for (const a of args) {
+
+    if (a.startsWith("-")) {
+
+      if (a.includes("l")) {
+        long = true;
+      }
+
+    } else {
+
+      path = normalizePath(a);
+    }
+  }
+
+  if (!pathExists(path)) {
+
+    out(
+      "ls: cannot access '" +
+      path +
+      "': No such file or directory",
+      "err"
+    );
+
+    return;
+  }
+
+
+  if (existsDir(path)) {
+
+    const entries =
+      state.files[path] || [];
+
+    if (long) {
+
+      out(
+        "total " +
+        Math.max(1, entries.length)
+      );
+
+      entries.forEach(e => {
+
+        out(
+          "drwxr-xr-x 2 " +
+          state.user +
+          " " +
+          state.user +
+          " 4096 " +
+          e
+        );
+
+      });
+
+    } else {
+
+      out(
+        entries.length
+          ? entries.join("  ")
+          : ""
+      );
+    }
+
+  } else {
+
+    out(base(path));
+  }
+}
+
+
+/* =========================================================
+   FILE CONTENT
+   ========================================================= */
+
+function fileContent(path) {
+
+  const p = normalizePath(path);
+
+  const name = base(p);
+
+
+  if (name === "os-release") {
+
+    return `NAME="Linux Mint"
+VERSION="22.x (simulated)"
+ID=linuxmint
+ID_LIKE="ubuntu debian"
+PRETTY_NAME="Linux Mint (no detected DE)"`;
+  }
+
+
+  if (name === "hostname") {
+    return state.host + "\n";
+  }
+
+
+  if (name === "hosts") {
+
+    return (
+      "127.0.0.1 localhost\n" +
+      "127.0.1.1 " +
+      state.host +
+      "\n"
+    );
+  }
+
+
+  if (name === "fstab") {
+
+    return "# /etc/fstab — simulated\n";
+  }
+
+
+  if (name === "passwd") {
+
+    return (
+      "root:x:0:0:root:/root:/bin/bash\n" +
+      state.user +
+      ":x:1000:1000:" +
+      state.user +
+      ":/home/" +
+      state.user +
+      ":/bin/bash\n"
+    );
+  }
+
+
+  if (name === "motd") {
+
+    return (
+      "Welcome to Linux Mint " +
+      "(no detected DE) — browser simulation.\n"
+    );
+  }
+
+
+  return "[simulated file content]\n";
+}
+
+
+/* =========================================================
+   CAT
+   ========================================================= */
+
+function printFile(args) {
+
+  if (!args.length) {
+
+    out(
+      "cat: missing operand",
+      "err"
+    );
+
+    return;
+  }
+
+
+  args
+    .filter(a => !a.startsWith("-"))
+    .forEach(p => {
+
+      const full = normalizePath(p);
+
+      if (!pathExists(full)) {
+
+        out(
+          "cat: " +
+          p +
+          ": No such file or directory",
+          "err"
+        );
+
+        return;
+      }
+
+      out(fileContent(p));
+    });
+}
+
+
+/* =========================================================
+   APT
+   ========================================================= */
+
+function packageCmd(args) {
+
+  const action = args[0];
+
+  const pkgs = args
+    .slice(1)
+    .filter(x => !x.startsWith("-"));
+
+
+  if (!action) {
+
+    out(
+      "Usage: apt {update|upgrade|install|remove|search|list} [packages...]"
+    );
+
+    return;
+  }
+
+
+  if (action === "update") {
+
+    out(
+      "Hit:1 http://packages.linuxmint.com simulated vera InRelease"
+    );
+
+    out(
+      "Hit:2 http://archive.ubuntu.com simulated jammy InRelease"
+    );
+
+    out(
+      "Reading package lists... Done"
+    );
+
+    return;
+  }
+
+
+  if (action === "upgrade") {
+
+    out("Calculating upgrade... Done");
+
+    out(
+      "0 upgraded, 0 newly installed, 0 to remove."
+    );
+
+    return;
+  }
+
+
+  if (action === "install") {
+
+    if (!pkgs.length) {
+
+      out(
+        "E: No packages specified",
+        "err"
+      );
+
+      return;
+    }
+
+
+    pkgs.forEach(p => {
+
+      state.packages.add(p);
+
+      out(
+        "Setting up " +
+        p +
+        " (simulated) ... Done"
+      );
+    });
+
+
+    out(
+      "Done. No real packages were installed."
+    );
+
+    return;
+  }
+
+
+  if (action === "remove") {
+
+    pkgs.forEach(p => {
+
+      state.packages.delete(p);
+
+      out(
+        "Removing " +
+        p +
+        " (simulated) ... Done"
+      );
+    });
+
+    return;
+  }
+
+
+  if (action === "search") {
+
+    out("Sorting... Done");
+
+    out(
+      "Full Text Search Results (simulated):"
+    );
+
+    out(
+      (pkgs[0] || "mint")
+        .replace(/[^a-z0-9-]/gi, "") +
+      " — simulated package result"
+    );
+
+    return;
+  }
+
+
+  if (action === "list") {
+
+    out("Listing...");
+
+    [...state.packages]
+      .sort()
+      .forEach(p => {
+
+        out(
+          p +
+          "/simulated 1.0"
+        );
+      });
+
+    return;
+  }
+
+
+  out(
+    "apt: unknown command '" +
+    action +
+    "'",
+    "err"
+  );
+}
+
+
+/* =========================================================
+   SYSTEMCTL
+   ========================================================= */
+
+function systemctl(args) {
+
+  const a = args[0];
+
+  const s = args[1] || "";
+
+
+  if (!a) {
+
+    out(
+      "Usage: systemctl {status|start|stop|restart|enable|disable} SERVICE"
+    );
+
+    return;
+  }
+
+
+  if (a === "status") {
+
+    out(
+      "● " +
+      (s || "system") +
+      " — simulated systemd"
+    );
+
+    out(
+      "   Loaded: loaded (/lib/systemd/system/" +
+      (s || "system") +
+      ".service; enabled)"
+    );
+
+    out(
+      "   Active: active (running) since boot"
+    );
+
+    return;
+  }
+
+
+  out(
+    "Simulated systemctl: " +
+    a +
+    " " +
+    s +
+    " — OK"
+  );
+}
+
+
+/* =========================================================
+   NEOFETCH
+   ========================================================= */
+
+function neofetch() {
+
+  outLines(`
+       .888888.       mint@mint
+     .8888888888.     ----------------
+    88888888888888    OS: Linux Mint (no detected DE)
+   8888888888888888   Kernel: 6.8.0-generic (simulated)
+   8888888888888888   Shell: bash
+   8888888888888888   DE: None detected
+    88888888888888    WM: None
+     '8888888888'     Terminal: Browser
+       '888888'       CPU: Virtual CPU
+                       Memory: 4096 MiB (simulated)
+`);
+}
+
+
+/* =========================================================
+   TREE
+   ========================================================= */
+
+function tree(
+  path = state.cwd,
+  prefix = "",
+  depth = 2
+) {
+
+  if (
+    depth < 0 ||
+    !existsDir(path)
+  ) {
+    return;
+  }
+
+
+  const entries =
+    state.files[path] || [];
+
+
+  entries.forEach((e, i) => {
+
+    const last =
+      i === entries.length - 1;
+
+    out(
+      prefix +
+      (last ? "└── " : "├── ") +
+      e
+    );
+
+
+    const p =
+      (path === "/" ? "" : path) +
+      "/" +
+      e;
+
+
+    if (existsDir(p)) {
+
+      tree(
+        p,
+        prefix + (last ? "    " : "│   "),
+        depth - 1
+      );
+    }
+
+  });
+}
+
+
+/* =========================================================
+   CALENDAR
+   ========================================================= */
+
+function calendar() {
+
+  const d = new Date();
+
+  const y = d.getFullYear();
+  const m = d.getMonth();
+
+  const first =
+    new Date(y, m, 1).getDay();
+
+  const start =
+    (first + 6) % 7;
+
+  const days =
+    new Date(y, m + 1, 0).getDate();
+
+  const names =
+    ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+
+  let s =
+    names.join(" ") +
+    "\n";
+
+
+  for (let i = 0; i < start; i++) {
+    s += "   ";
+  }
+
+
+  for (let day = 1; day <= days; day++) {
+
+    s +=
+      String(day).padStart(2, " ") +
+      " ";
+
+    if ((start + day) % 7 === 0) {
+      s += "\n";
+    }
+  }
+
+
+  out(s.trimEnd());
+}
+
+
+/* =========================================================
+   COMMAND EXECUTION
+   ========================================================= */
+
+function command(name, args, raw) {
+
+  switch (name) {
+
+
+    case "help":
+
+      out(
+        "Linux Mint (no detected DE) — simulated terminal\n"
+      );
+
+      out(
+        "Available commands:"
+      );
+
+      out(
+        Object.keys(commands)
+          .sort()
+          .join("  ")
+      );
+
+      out(
+        "\nTip: type `man COMMAND` for help."
+      );
+
+      out(
+        "This simulator is safe and cannot modify your real system."
+      );
+
+      break;
+
+
+    case "clear":
+    case "cls":
+
+      screen.innerHTML = "";
+
+      break;
+
+
+    case "about":
+
+      outLines(
+`Linux Mint (no detected DE)
+Browser-based terminal simulator
+No real Linux commands are executed.
+Special: reboot opens index.html.`
+      );
+
+      break;
+
+
+    case "neofetch":
+    case "fastfetch":
+
+      neofetch();
+
+      break;
+
+
+    case "uname":
+
+      out(
+        args.includes("-a")
+          ? "Linux mint 6.8.0-generic #1 SMP PREEMPT_DYNAMIC x86_64 GNU/Linux (simulated)"
+          : "Linux"
+      );
+
+      break;
+
+
+    case "hostname":
+
+      out(state.host);
+
+      break;
+
+
+    case "whoami":
+
+      out(state.user);
+
+      break;
+
+
+    case "id":
+
+      out(
+        "uid=1000(" +
+        state.user +
+        ") gid=1000(" +
+        state.user +
+        ") groups=1000(" +
+        state.user +
+        "),27(sudo)"
+      );
+
+      break;
+
+
+    case "pwd":
+
+      out(state.cwd);
+
+      break;
+
+
+    case "ls":
+    case "dir":
+
+      ls(args);
+
+      break;
+
+
+    case "ll":
+
+      ls(["-la", ...args]);
+
+      break;
+
+
+    case "cd": {
+
+      const p =
+        normalizePath(args[0] || "~");
+
+
+      if (!existsDir(p)) {
+
+        out(
+          "bash: cd: " +
+          (args[0] || "~") +
+          ": No such file or directory",
+          "err"
+        );
+
+      } else {
+
+        state.cwd = p;
+      }
+
+      break;
+    }
+
+
+    case "tree":
+
+      tree(
+        normalizePath(
+          args[0] || state.cwd
+        ),
+        "",
+        2
+      );
+
+      break;
+
+
+    case "cat":
+    case "less":
+    case "more":
+    case "head":
+    case "tail":
+
+      printFile(args);
+
+      break;
+
+
+    case "touch":
+
+      args.forEach(x => {
+
+        const p =
+          normalizePath(x);
+
+        ensureEntry(
+          parent(p),
+          base(p)
+        );
+
+        out(
+          "created " + p
+        );
+      });
+
+      break;
+
+
+    case "mkdir":
+
+      args
+        .filter(x => !x.startsWith("-"))
+        .forEach(x => {
+
+          const p =
+            normalizePath(x);
+
+
+          if (existsDir(p)) {
+
+            out(
+              "mkdir: cannot create directory '" +
+              x +
+              "': File exists",
+              "err"
+            );
+
+          } else {
+
+            state.files[p] = [];
+
+            ensureEntry(
+              parent(p),
+              base(p)
+            );
+
+            out(
+              "created " + p
+            );
+          }
+        });
+
+      break;
+
+
+    case "rmdir":
+
+      args.forEach(x => {
+
+        const p =
+          normalizePath(x);
+
+
+        if (!existsDir(p)) {
+
+          out(
+            "rmdir: failed: No such file or directory",
+            "err"
+          );
+
+        }
+
+        else if (
+          (state.files[p] || []).length
+        ) {
+
+          out(
+            "rmdir: failed: Directory not empty",
+            "err"
+          );
+
+        }
+
+        else {
+
+          delete state.files[p];
+
+          removeEntry(p);
+
+          out(
+            "removed " + p
+          );
+        }
+      });
+
+      break;
+
+
+    case "rm":
+
+      args
+        .filter(x => !x.startsWith("-"))
+        .forEach(x => {
+
+          const p =
+            normalizePath(x);
+
+
+          if (!pathExists(p)) {
+
+            out(
+              "rm: cannot remove '" +
+              x +
+              "': No such file or directory",
+              "err"
+            );
+
+          } else {
+
+            delete state.files[p];
+
+            removeEntry(p);
+
+            out(
+              "removed " +
+              p +
+              " (simulated)"
+            );
+          }
+        });
+
+      break;
+
+
+    case "cp":
+
+      if (args.length >= 2) {
+
+        out(
+          "copied " +
+          args[0] +
+          " -> " +
+          args[1] +
+          " (simulated)"
+        );
+
+      } else {
+
+        out(
+          "cp: missing file operand",
+          "err"
+        );
+      }
+
+      break;
+
+
+    case "mv":
+
+      if (args.length >= 2) {
+
+        out(
+          "moved " +
+          args[0] +
+          " -> " +
+          args[1] +
+          " (simulated)"
+        );
+
+      } else {
+
+        out(
+          "mv: missing file operand",
+          "err"
+        );
+      }
+
+      break;
+
+
+    case "echo":
+
+      out(
+        raw
+          .replace(/^echo\s*/i, "")
+          .replace(/^["']|["']$/g, "")
+      );
+
+      break;
+
+
+    case "printf":
+
+      out(
+        raw
+          .replace(/^printf\s*/i, "")
+          .replace(/%s/g, "")
+          .replace(/["']/g, "")
+      );
+
+      break;
+
+
+    case "grep":
+
+      out(
+        "grep: simulated search — matching lines would be shown here."
+      );
+
+      break;
+
+
+    case "find":
+
+      out(
+        (args[0] || ".") +
+        "\n  " +
+        (args[1] || "*") +
+        " (simulated results)"
+      );
+
+      break;
+
+
+    case "which":
+    case "whereis":
+    case "type":
+
+      args.forEach(x => {
+
+        out(
+          "/usr/bin/" + x
+        );
+      });
+
+      break;
+
+
+    case "history":
+
+      state.history.forEach(
+        (x, i) => {
+
+          out(
+            String(i + 1).padStart(4, " ") +
+            "  " +
+            x
+          );
+        }
+      );
+
+      break;
+
+
+    case "date":
+
+      out(
+        new Date().toString() +
+        " (browser clock)"
+      );
+
+      break;
+
+
+    case "cal":
+
+      calendar();
+
+      break;
+
+
+    case "uptime":
+
+      out(
+        "22:00:00 up 2 hours, 17 min, 1 user, load average: 0.08, 0.05, 0.01 (simulated)"
+      );
+
+      break;
+
+
+    case "ps":
+    case "top":
+    case "htop":
+
+      outLines(
+`PID  TTY      STAT  COMMAND
+1    ?        Ss    systemd
+742  pts/0    S+    bash
+901  pts/0    R+    ${name} (simulated)`
+      );
+
+      break;
+
+
+    case "free":
+
+      outLines(
+`               total        used        free
+Mem:        4096MiB     1280MiB     2816MiB
+Swap:       2048MiB        0MiB     2048MiB`
+      );
+
+      break;
+
+
+    case "df":
+
+      outLines(
+`Filesystem      Size  Used Avail Use% Mounted on
+/dev/sda1        50G   12G   38G  24% /`
+      );
+
+      break;
+
+
+    case "du":
+
+      out(
+        "4.0K\t" +
+        state.cwd +
+        " (simulated)"
+      );
+
+      break;
+
+
+    case "lsblk":
+
+      outLines(
+`NAME   MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS
+sda      8:0    0   50G  0 disk
+└─sda1   8:1    0   50G  0 part /`
+      );
+
+      break;
+
+
+    case "mount":
+
+      out(
+        "/dev/sda1 on / type ext4 (rw,relatime) [simulated]"
+      );
+
+      break;
+
+
+    case "mountpoint":
+
+      out(
+        (args[0] || "/") +
+        " is a mountpoint (simulated)"
+      );
+
+      break;
+
+
+    case "env":
+    case "printenv":
+
+      outLines(
+`USER=${state.user}
+HOME=/home/${state.user}
+SHELL=/bin/bash
+TERM=xterm-256color
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`
+      );
+
+      break;
+
+
+    case "export":
+
+      out(
+        args.length
+          ? "exported " + args[0] + " (simulated)"
+          : ""
+      );
+
+      break;
+
+
+    case "alias":
+
+      outLines(
+`alias ll='ls -la'
+alias la='ls -A'`
+      );
+
+      break;
+
+
+    case "source":
+
+      out(
+        "sourced " +
+        (args[0] || "file") +
+        " (simulated)"
+      );
+
+      break;
+
+
+    case "bash":
+    case "sh":
+
+      out(
+        "Starting simulated " +
+        name +
+        " shell. Type `exit` to return."
+      );
+
+      break;
+
+
+    case "sudo":
+
+      if (args[0]) {
+
+        out(
+          "[sudo] password for " +
+          state.user +
+          ":"
+        );
+
+        out(
+          "Authentication accepted (simulated). Running: " +
+          args.join(" ")
+        );
+
+      } else {
+
+        out(
+          "usage: sudo COMMAND",
+          "err"
+        );
+      }
+
+      break;
+
+
+    case "su":
+
+      out(
+        "Switching to root shell (simulated)."
+      );
+
+      break;
+
+
+    case "apt":
+    case "apt-get":
+
+      packageCmd(args);
+
+      break;
+
+
+    case "apt-cache":
+
+      out(
+        "apt-cache: simulated package metadata\n" +
+        (args[1] || args[0] || "mint") +
+        " — available"
+      );
+
+      break;
+
+
+    case "dpkg":
+
+      outLines(
+`dpkg: simulated Debian package database
+No real package changes are made.`
+      );
+
+      break;
+
+
+    case "snap":
+    case "flatpak":
+    case "nala":
+
+      out(
+        name +
+        ": simulated command completed successfully."
+      );
+
+      break;
+
+
+    case "systemctl":
+
+      systemctl(args);
+
+      break;
+
+
+    case "service":
+
+      out(
+        "service " +
+        (args[0] || "") +
+        " " +
+        (args[1] || "status") +
+        " — simulated"
+      );
+
+      break;
+
+
+    case "journalctl":
+
+      outLines(
+`Aug 15 22:00:00 mint systemd[1]: Started simulated terminal session.
+Aug 15 22:00:01 mint kernel: Linux Mint simulator ready.`
+      );
+
+      break;
+
+
+    case "dmesg":
+
+      outLines(
+`[    0.000000] Linux version 6.8.0-generic (simulated)
+[    0.100000] Kernel initialized
+[    1.000000] Simulation ready`
+      );
+
+      break;
+
+
+    case "lsmod":
+
+      outLines(
+`Module                  Size  Used by
+ext4                   99999  1
+loop                   45000  0
+(simulated)`
+      );
+
+      break;
+
+
+    case "modprobe":
+
+      out(
+        "modprobe: loaded " +
+        (args[0] || "module") +
+        " (simulated)"
+      );
+
+      break;
+
+
+    case "ip":
+    case "ifconfig":
+
+      outLines(
+`lo: 127.0.0.1/8
+eth0: 192.168.1.100/24
+    state UP (simulated)`
+      );
+
+      break;
+
+
+    case "ping":
+
+      outLines(
+`PING ${args[0] || "localhost"} (simulated)
+64 bytes: time=0.03 ms
+64 bytes: time=0.04 ms
+--- ${args[0] || "localhost"} ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss`
+      );
+
+      break;
+
+
+    case "curl":
+    case "wget":
+
+      out(
+        "HTTP/1.1 200 OK (simulated)\n" +
+        "No network request was made."
+      );
+
+      break;
+
+
+    case "ssh":
+    case "scp":
+
+      out(
+        name +
+        " " +
+        args.join(" ") +
+        " — simulated; no network connection made."
+      );
+
+      break;
+
+
+    case "git":
+
+      out(
+        "git: simulated repository operation completed."
+      );
+
+      break;
+
+
+    case "nano":
+    case "vim":
+    case "vi":
+
+      outLines(
+`[${name} simulated editor]
+Press Ctrl+C to leave the simulated editor.`
+      );
+
+      break;
+
+
+    case "man": {
+
+      const m =
+        manuals[args[0]];
+
+      if (m) {
+
+        outLines(m);
+
+      } else {
+
+        out(
+          "No manual entry for " +
+          (args[0] || "") +
+          " (simulated)."
+        );
+      }
+
+      break;
+    }
+
+
+    case "info":
+
+      out(
+        "Info for " +
+        (args[0] || "command") +
+        " — simulated."
+      );
+
+      break;
+
+
+    case "chmod":
+    case "chown":
+    case "ln":
+
+      out(
+        name +
+        ": operation completed (simulated)."
+      );
+
+      break;
+
+
+    case "kill":
+    case "pkill":
+
+      out(
+        "process operation completed (simulated)."
+      );
+
+      break;
+
+
+    /* =====================================================
+       REBOOT
+       ===================================================== */
+
+    case "reboot":
+
+      out(
+        "Broadcast message from root@mint:"
+      );
+
+      out(
+        "The system is going down for reboot NOW! (simulated)"
+      );
+
+      setTimeout(() => {
+
+        window.location.href =
+          "index.html";
+
+      }, 700);
+
+      break;
+
+
+    /* =====================================================
+       SHUTDOWN
+       ===================================================== */
+
+    case "shutdown":
+    case "poweroff":
+    case "halt":
+
+      out(
+        "System is shutting down... (simulated)"
+      );
+
+      setTimeout(() => {
+
+        screen.innerHTML = "";
+
+        outLines(
+`Linux Mint is powered off.
+
+Refresh the page or type reboot after restoring the simulator.`
+        );
+
+      }, 700);
+
+      break;
+
+
+    /* =====================================================
+       EXIT
+       ===================================================== */
+
+    case "logout":
+    case "exit":
+
+      out("logout");
+
+      setTimeout(() => {
+
+        screen.innerHTML = "";
+
+        out(
+          "No graphical desktop environment detected."
+        );
+
+        out(
+          "This is a browser simulation. Type `help` to continue."
+        );
+
+      }, 300);
+
+      break;
+
+
+    /* =====================================================
+       UNKNOWN COMMAND
+       ===================================================== */
+
+    default:
+
+      if (name.startsWith("./")) {
+
+        out(
+          name +
+          ": command executed (simulated)"
+        );
+
+      } else {
+
+        out(
+          "bash: " +
+          name +
+          ": command not found",
+          "err"
+        );
+      }
+
+  }
+}
+
+
+/* =========================================================
+   KEYBOARD HANDLING
+   ========================================================= */
+
+input.addEventListener("keydown", e => {
+
+
+  /* ENTER */
+
+  if (e.key === "Enter") {
+
+    e.preventDefault();
+
+    const raw =
+      input.value.trim();
+
+
+    if (!raw) {
+      return;
+    }
+
+
+    /* Wyświetl wpisaną komendę */
+
+    out(
+      prompt() +
+      " " +
+      raw,
+      "prompt"
+    );
+
+
+    /* Historia */
+
+    state.history.push(raw);
+
+    state.histPos =
+      state.history.length;
+
+
+    /* Wyczyść input */
+
+    input.value = "";
+
+
+    /* Rozbij komendę */
+
+    const a =
+      splitArgs(raw);
+
+
+    const name =
+      (a.shift() || "")
+        .toLowerCase();
+
+
+    /* Wykonaj */
+
+    command(
+      name,
+      a,
+      raw
+    );
+
+
+    /* Przywróć focus */
+
+    setTimeout(() => {
+      input.focus();
+    }, 0);
+
+    return;
+  }
+
+
+  /* =======================================================
+     ARROW UP
+     ======================================================= */
+
+  if (e.key === "ArrowUp") {
+
+    e.preventDefault();
+
+
+    if (state.histPos > 0) {
+
+      state.histPos--;
+
+      input.value =
+        state.history[state.histPos] || "";
+    }
+
+    return;
+  }
+
+
+  /* =======================================================
+     ARROW DOWN
+     ======================================================= */
+
+  if (e.key === "ArrowDown") {
+
+    e.preventDefault();
+
+
+    if (
+      state.histPos <
+      state.history.length - 1
+    ) {
+
+      state.histPos++;
+
+      input.value =
+        state.history[state.histPos] || "";
+
+    } else {
+
+      state.histPos =
+        state.history.length;
+
+      input.value = "";
+    }
+
+    return;
+  }
+
+
+  /* =======================================================
+     TAB AUTOCOMPLETE
+     ======================================================= */
+
+  if (e.key === "Tab") {
+
+    e.preventDefault();
+
+
+    const val =
+      input.value.trim();
+
+
+    if (!val) {
+      return;
+    }
+
+
+    const matches =
+      Object.keys(commands)
+        .filter(x =>
+          x.startsWith(val)
+        );
+
+
+    if (matches.length === 1) {
+
+      input.value =
+        matches[0] + " ";
+
+    }
+
+    else if (matches.length > 1) {
+
+      out(
+        matches.join("  ")
+      );
+    }
+
+    return;
+  }
+
+
+  /* =======================================================
+     CTRL + L
+     ======================================================= */
+
+  if (
+    e.ctrlKey &&
+    e.key.toLowerCase() === "l"
+  ) {
+
+    e.preventDefault();
+
+    screen.innerHTML = "";
+
+    return;
+  }
+
+
+  /* =======================================================
+     CTRL + C
+     ======================================================= */
+
+  if (
+    e.ctrlKey &&
+    e.key.toLowerCase() === "c"
+  ) {
+
+    e.preventDefault();
+
+    out(
+      prompt() +
+      " ^C",
+      "err"
+    );
+
+    input.value = "";
+
+    return;
+  }
+
+});
+
+
+/* =========================================================
+   GLOBAL KEYBOARD FOCUS
+   ========================================================= */
+
+document.addEventListener("keydown", e => {
+
+  /*
+    Jeżeli użytkownik kliknie np. terminal,
+    ale input straci focus, ponownie go ustawiamy.
+  */
+
+  if (
+    document.activeElement !== input &&
+    !e.ctrlKey &&
+    !e.altKey &&
+    !e.metaKey
+  ) {
+
+    input.focus();
+  }
+
+});
+
+
+/* =========================================================
+   START SCREEN
+   ========================================================= */
+
+outLines(
+`Linux Mint 22.x (simulated)
+Linux Mint (no detected DE)
+Kernel 6.8.0-generic (simulated)
+
+No graphical desktop environment detected.
+Type \`help\` to list commands.
+Type \`reboot\` to enter index.html.`
+);
+
+
+/* =========================================================
+   INITIAL FOCUS
+   ========================================================= */
+
+setTimeout(() => {
+  input.focus();
+}, 100);
+
+
+/* =========================================================
+   KEEP FOCUS WHEN CLICKING TERMINAL
+   ========================================================= */
+
+window.addEventListener("load", () => {
+  input.focus();
+});
+
+</script>
+
+</body>
+</html>
