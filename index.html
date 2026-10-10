@@ -6,7 +6,361 @@
 <title>THUNDERBALL VR — Floppa Labs</title>
 <style>
   :root{--cyan:#00e5ff;--orange:#ffb347;--panel:rgba(7,12,20,.78)}
-  *{box-sizing:border-box} html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05080e;color:#eafaff;font-family:system-ui,Segoe UI,sans-serif}
+  *{box-sizing:border-box} html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05080e;color:#eafaff;font-family:system-ui,Segoe UI,sans-serif
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Floppa Thunderball VR</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;overflow:hidden;background:#111820;color:white;font:15px Arial}
+canvas{display:block}
+#hud{position:fixed;top:12px;left:12px;z-index:2;pointer-events:none;text-shadow:0 2px 5px #000}
+h1{color:#42d9ff;margin:0;font-size:23px}
+.stat{background:#101820d9;padding:7px 10px;margin-top:5px;border-radius:8px;width:max-content}
+#help{position:fixed;top:10px;right:10px;background:#101820d9;padding:10px;border-radius:10px;font-size:12px;line-height:1.7}
+#bottom{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:3}
+button{border:0;border-radius:10px;background:#08a7d3;color:white;font-weight:bold;padding:13px;font-size:14px}
+#menu{position:fixed;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;text-align:center;background:#080e17ed;padding:20px}
+.panel{max-width:480px}.panel h2{font-size:38px;color:#42d9ff;margin:0}
+#status{color:#ffd166;overflow-wrap:anywhere}
+@media(max-width:600px){#help{top:auto;bottom:70px;right:5px;font-size:10px}h1{font-size:19px}#bottom button{font-size:12px;padding:10px}}
+</style>
+</head>
+<body>
+<div id="hud">
+<h1>THUNDERBALL VR</h1>
+<div class="stat">❤️ HP: <span id="hp">100</span></div>
+<div class="stat">☠ Kills: <span id="kills">0</span></div>
+<div class="stat">🌊 Fala: <span id="wave">1</span></div>
+<div class="stat">⚡ Combo: x<span id="combo">0</span></div>
+<div class="stat">⭐ Punkty: <span id="score">0</span></div>
+<div id="status"></div>
+</div>
+<div id="help">WASD — ruch<br>Mysz — obrót<br>LPM — atak<br>PPM / F — trik<br>Spacja — unik<br>VR: trigger — atak<br>Grip — trik</div>
+<div id="bottom">
+<button id="hit">🥊 ATAK</button>
+<button id="special">⚡ TRIK</button>
+<button id="dodge">💨 UNIK</button>
+</div>
+<div id="menu"><div class="panel">
+<h2>THUNDERBALL</h2>
+<p>Wskakuj na arenę. Wykonuj triki, łańcuchowe zamachy i przetrwaj kolejne fale!</p>
+<button id="play">GRAJ</button>
+<button id="vr">🥽 WEJDŹ DO VR</button>
+<p id="msg">Meta Quest 3S • WebXR</p>
+</div></div>
+
+<script type="module">
+import * as THREE from
+'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
+
+const $=id=>document.getElementById(id);
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x71869a);
+scene.fog=new THREE.Fog(0x71869a,20,70);
+
+const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,.05,100);
+camera.position.set(0,1.65,4);
+
+const renderer=new THREE.WebGLRenderer({antialias:false});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.4));
+renderer.setSize(innerWidth,innerHeight);
+renderer.xr.enabled=true;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xd8eaff,0x30251d,2));
+const sun=new THREE.DirectionalLight(0xffd6a2,2.5);
+sun.position.set(-8,12,5);
+scene.add(sun);
+
+const mat=(c,r=.8)=>new THREE.MeshStandardMaterial({color:c,roughness:r});
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(100,100),mat(0x4c555d));
+ground.rotation.x=-Math.PI/2;
+ground.position.y=-.05;
+scene.add(ground);
+
+const dark=mat(0x252b36),blue=mat(0x086f90),metal=mat(0xa8b0b7,.3);
+const neon=mat(0x32d8ff,.35);
+
+// Industrial city arena
+for(let i=0;i<28;i++){
+ const side=i%2?1:-1;
+ const h=3+Math.random()*6;
+ const b=new THREE.Mesh(
+  new THREE.BoxGeometry(3+Math.random()*3,h,4),
+  i%3===0?blue:dark
+ );
+ b.position.set(side*(10+Math.random()*5),h/2,-6-Math.floor(i/2)*3.5);
+ scene.add(b);
+}
+for(let i=0;i<20;i++){
+ const box=new THREE.Mesh(new THREE.BoxGeometry(.9,.9,.9),mat(0x785333));
+ box.position.set((Math.random()-.5)*18,.45,-Math.random()*35);
+ scene.add(box);
+}
+
+// First-person Thunderball and chain
+scene.add(camera);
+const weapon=new THREE.Group();
+camera.add(weapon);
+
+const handle=new THREE.Mesh(new THREE.CylinderGeometry(.07,.1,.35,8),dark);
+handle.position.set(.35,-.3,-.48);
+handle.rotation.x=.5;
+weapon.add(handle);
+
+const ball=new THREE.Mesh(new THREE.SphereGeometry(.16,14,12),metal);
+weapon.add(ball);
+
+const links=[];
+for(let i=0;i<9;i++){
+ const l=new THREE.Mesh(new THREE.TorusGeometry(.035,.012,5,8),metal);
+ weapon.add(l);
+ links.push(l);
+}
+
+const enemies=[],particles=[],keys={};
+let hp=100,kills=0,score=0,wave=1,combo=0,comboTimer=0;
+let playing=false,cooldown=0,swing=0,trick=0,spawnTimer=1;
+let yaw=0,pitch=0,drag=false,px=0,py=0;
+const clock=new THREE.Clock();
+
+function spawnEnemy(){
+ const a=Math.random()*Math.PI*2,r=8+Math.random()*3;
+ const g=new THREE.Group();
+ const shirt=mat([0x323b49,0x803e39,0x315a5a,0x51435f][Math.floor(Math.random()*4)]);
+ const body=new THREE.Mesh(new THREE.BoxGeometry(.48,.72,.3),shirt);
+ body.position.y=1.05;g.add(body);
+ const head=new THREE.Mesh(new THREE.SphereGeometry(.18,10,8),mat(0xb98a68));
+ head.position.y=1.55;g.add(head);
+ const legs=[];
+ for(const s of [-1,1]){
+  const leg=new THREE.Mesh(new THREE.BoxGeometry(.17,.6,.2),dark);
+  leg.position.set(s*.13,.35,0);g.add(leg);legs.push(leg);
+ }
+ const marker=new THREE.Mesh(new THREE.ConeGeometry(.11,.2,6),mat(0xff3e4b));
+ marker.position.y=1.95;g.add(marker);
+ g.position.set(camera.position.x+Math.sin(a)*r,0,
+ camera.position.z-Math.abs(Math.cos(a))*r-2);
+ scene.add(g);
+ enemies.push({g,hp:2+Math.floor(wave/3),speed:.55+Math.random()*.3,
+ stun:0,hit:0,phase:Math.random()*5,legs});
+}
+
+function burst(pos,color=0x42d9ff,n=12){
+ for(let i=0;i<n;i++){
+  const m=new THREE.Mesh(new THREE.SphereGeometry(.04,5,5),
+   new THREE.MeshBasicMaterial({color}));
+  m.position.copy(pos);scene.add(m);
+  particles.push({m,v:new THREE.Vector3((Math.random()-.5)*4,Math.random()*3,(Math.random()-.5)*4),life:.4+Math.random()*.5});
+ }
+}
+
+function message(t){
+ $('msg').textContent=t;
+ clearTimeout(message.timer);
+ message.timer=setTimeout(()=>$('msg').textContent='',1300);
+}
+
+function hud(){
+ $('hp').textContent=Math.max(0,Math.floor(hp));
+ $('kills').textContent=kills;
+ $('wave').textContent=wave;
+ $('combo').textContent=combo;
+ $('score').textContent=score;
+}
+
+function findTarget(){
+ let best=null,min=6.5;
+ for(const e of enemies){
+  if(e.hp<=0)continue;
+  const d=e.g.position.distanceTo(camera.position);
+  if(d<min){best=e;min=d}
+ }
+ return best;
+}
+
+function attack(special=false){
+ if(!playing||cooldown>0)return;
+ cooldown=special?.8:.32;
+ swing=1;
+ if(special)trick=1;
+
+ const e=findTarget();
+ if(!e){message('Zamach!');return}
+
+ const forward=new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
+ const to=e.g.position.clone().sub(camera.position);
+ to.y=0;to.normalize();
+
+ if(forward.dot(to)<-.1){message('Odwróć się do celu!');return}
+
+ e.hp-=special?3:1;
+ e.stun=special?1.2:.55;
+ e.hit=.2;
+ e.g.position.addScaledVector(to,special?1.7:1);
+
+ burst(e.g.position.clone().add(new THREE.Vector3(0,1,0)),
+       special?0xffd166:0x42d9ff,special?22:12);
+
+ combo++;comboTimer=3;
+ score+=(special?120:40)*combo;
+ message(special?'⚡ THUNDER TRICK!':'TRAFIENIE! COMBO x'+combo);
+
+ if(e.hp<=0){
+  kills++;score+=150;
+  burst(e.g.position.clone().add(new THREE.Vector3(0,1,0)),0xff9d48,20);
+  scene.remove(e.g);
+ }
+ if(kills>=wave*5){wave++;message('🌊 FALA '+wave+'!')}
+ hud();
+}
+
+function dodge(){
+ if(!playing)return;
+ const f=new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
+ camera.position.addScaledVector(f,1);
+ burst(camera.position.clone(),0x42d9ff,8);
+}
+
+$('play').onclick=()=>{
+ playing=true;
+ $('menu').style.display='none';
+ for(let i=0;i<5;i++)spawnEnemy();
+ message('FALA 1 — JAZDA!');
+};
+$('hit').onclick=()=>attack();
+$('special').onclick=()=>attack(true);
+$('dodge').onclick=dodge;
+
+$('vr').onclick=async()=>{
+ try{
+  if(!navigator.xr)throw Error('WebXR niedostępny.');
+  if(!await navigator.xr.isSessionSupported('immersive-vr'))
+   throw Error('Ta przeglądarka nie obsługuje VR.');
+  const session=await navigator.xr.requestSession('immersive-vr',
+   {optionalFeatures:['local-floor','bounded-floor']});
+  await renderer.xr.setSession(session);
+  playing=true;$('menu').style.display='none';
+  if(!enemies.length)for(let i=0;i<5;i++)spawnEnemy();
+ }catch(e){message(e.message+' Sprawdź przeglądarkę Quest i HTTPS.')}
+};
+
+const c0=renderer.xr.getController(0),c1=renderer.xr.getController(1);
+scene.add(c0,c1);
+for(const c of [c0,c1]){
+ c.addEventListener('selectstart',()=>attack());
+ c.addEventListener('squeezestart',()=>attack(true));
+}
+
+addEventListener('keydown',e=>{
+ keys[e.code]=true;
+ if(e.code==='Space'){e.preventDefault();dodge()}
+ if(e.code==='KeyF')attack(true);
+ if(e.code==='KeyE')attack();
+});
+addEventListener('keyup',e=>keys[e.code]=false);
+renderer.domElement.addEventListener('pointerdown',e=>{
+ if(e.button===0){drag=true;px=e.clientX;py=e.clientY}
+ if(e.button===2)attack(true);
+});
+addEventListener('pointerup',()=>drag=false);
+addEventListener('contextmenu',e=>e.preventDefault());
+addEventListener('pointermove',e=>{
+ if(drag&&!renderer.xr.isPresenting){
+  yaw-=(e.clientX-px)*.004;
+  pitch=Math.max(-1,Math.min(1,pitch-(e.clientY-py)*.003));
+  px=e.clientX;py=e.clientY;
+ }
+});
+
+function animate(){
+ const dt=Math.min(clock.getDelta(),.04),t=clock.elapsedTime;
+ cooldown=Math.max(0,cooldown-dt);
+ swing=Math.max(0,swing-dt*2.5);
+ trick=Math.max(0,trick-dt*1.6);
+ comboTimer-=dt;
+ if(comboTimer<=0)combo=0;
+
+ if(!renderer.xr.isPresenting){
+  camera.rotation.order='YXZ';
+  camera.rotation.y=yaw;camera.rotation.x=pitch;
+  const v=new THREE.Vector3(
+   Number(keys.KeyD||keys.ArrowRight)-Number(keys.KeyA||keys.ArrowLeft),0,
+   Number(keys.KeyS||keys.ArrowDown)-Number(keys.KeyW||keys.ArrowUp));
+  if(v.lengthSq()){
+   v.normalize().applyAxisAngle(new THREE.Vector3(0,1,0),yaw);
+   camera.position.addScaledVector(v,dt*3.5);
+  }
+ }else{
+  const session=renderer.xr.getSession();
+  if(session)for(const src of session.inputSources){
+   if(!src.gamepad)continue;
+   const b=src.gamepad.buttons;
+   if(src.handedness==='right'&&b[1]?.pressed&&!src._tr){attack(true);src._tr=true}
+   else if(!b[1]?.pressed)src._tr=false;
+   if(src.handedness==='left'&&b[1]?.pressed&&!src._un){dodge();src._un=true}
+   else if(!b[1]?.pressed)src._un=false;
+  }
+ }
+
+ const a=swing?Math.sin((1-swing)*Math.PI*2):Math.sin(t*1.5)*.07;
+ weapon.rotation.set(-.2+a*.6,0,-.2-a*1.2);
+ ball.position.set(.35+Math.sin(a)*.32,-.3+Math.abs(a)*.1,-.68-Math.abs(a)*.22);
+ links.forEach((l,i)=>{
+  l.position.set(.35+Math.sin(a)*(i+1)*.035,
+  -.3+Math.abs(a)*(i+1)*.014,-.48-(i+1)*.065);
+  l.rotation.y=.7+a*.5;
+ });
+ weapon.scale.setScalar(trick?1.1:1);
+
+ if(playing){
+  spawnTimer-=dt;
+  if(spawnTimer<=0&&enemies.filter(e=>e.hp>0).length<Math.min(12,4+wave*2)){
+   spawnEnemy();spawnTimer=Math.max(.65,2-wave*.08);
+  }
+  for(const e of enemies){
+   if(e.hp<=0)continue;
+   const p=e.g.position,dx=camera.position.x-p.x,dz=camera.position.z-p.z;
+   const d=Math.hypot(dx,dz)||1;
+   e.phase+=dt*7;
+   if(e.stun>0)e.stun-=dt;
+   else if(d>1.25){p.x+=dx/d*e.speed*dt;p.z+=dz/d*e.speed*dt}
+   else{e.hit-=dt;if(e.hit<=0){hp-=7;e.hit=1;hud();message('DOSTAŁEŚ CIOS!')}}
+   e.g.rotation.y=Math.atan2(dx,dz);
+   e.g.position.y=Math.abs(Math.sin(e.phase))*.025;
+   e.legs.forEach((l,i)=>l.rotation.x=Math.sin(e.phase+i*Math.PI)*.4);
+  }
+  if(hp<=0){
+   playing=false;hp=100;kills=0;score=0;wave=1;combo=0;
+   for(const e of enemies)scene.remove(e.g);
+   enemies.length=0;$('menu').style.display='flex';
+   message('KONIEC GRY!');hud();
+  }
+ }
+
+ for(let i=particles.length-1;i>=0;i--){
+  const p=particles[i];p.life-=dt;p.v.y-=5*dt;
+  p.m.position.addScaledVector(p.v,dt);
+  if(p.life<=0){
+   scene.remove(p.m);p.m.geometry.dispose();p.m.material.dispose();
+   particles.splice(i,1);
+  }
+ }
+ renderer.render(scene,camera);
+}
+renderer.setAnimationLoop(animate);
+addEventListener('resize',()=>{
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
+
   canvas{display:block}
   #hud{position:fixed;inset:0;pointer-events:none}
   .top{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
